@@ -2,6 +2,9 @@ use bevy::prelude::*;
 use bevy::time::FixedTimestep;
 use bevy_rapier3d::prelude::*;
 use rand::Rng;
+use bevy_egui::{egui, EguiContext, EguiPlugin};
+use bevy_egui::egui::{Color32, Stroke};
+use bevy_egui::egui::color_picker::color_edit_button_hsva;
 use lerp::Lerp;
 
 use gamedebug::GameDebugPlugin;
@@ -19,15 +22,27 @@ struct Despawnable{
 
 #[derive(Component)]
 struct Ship{
-    guns: Vec<Vec3>,
-    cooldown: f32
+    shields: f32,
+    hits: usize
+}
+
+#[derive(Component)]
+struct LaserGun{
+    positions: Vec<Vec3>,
+    color: Color,
+    player: bool,
+    fire: bool,
+    cooldown: f32,
+    std_cooldown: f32
 }
 
 #[derive(Component)]
 struct Opponent;
 
 #[derive(Component)]
-struct Laser;
+struct Laser {
+    player: bool
+}
 
 #[derive(Component)]
 struct EffectTime {
@@ -52,15 +67,19 @@ fn main() {
         //bevy itself
         .add_plugins(DefaultPlugins)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
+        .add_plugin(EguiPlugin)
         .add_plugin(GameDebugPlugin)
         .add_startup_system(setup_camera)
         .add_startup_system(setup)
         //.add_state(GameState::GameStart)
         .add_system(move_ship)
+        .add_system(laser_player)
+        .add_system(laser_opponent)
         .add_system(spawn_laser)
         .add_system(collision)
         .add_system(create_effect)
         .add_system(remove_effect)
+        .add_system(create_ui)
         .add_system_set(
             SystemSet::new()
                 .with_run_criteria(FixedTimestep::step(2.0))
@@ -133,18 +152,31 @@ fn setup(
         },
         ..Default::default()
     })
-    .insert(RigidBody::Dynamic)
+    .insert(RigidBody::KinematicVelocityBased)
     .insert(Velocity {
         linvel: Vec3::new(0.0, 0.0, 0.0),
         ..default()
     })
+    .insert(Collider::cuboid(3.0,
+                             1.0,
+                             3.0))
+    .insert(ActiveEvents::COLLISION_EVENTS)
+    .insert(GravityScale(0.0))
     .insert(Name::new("Ship"))
     .insert(Ship{
-        guns: vec!(
+        shields: 1.0,
+        hits: 0
+    })
+    .insert(LaserGun{
+        positions: vec!(
             Vec3::new(-1.0,0.0,0.0),
             Vec3::new(1.0,0.0,0.0)
         ),
-        cooldown:0.0
+        player: true,
+        color: Color::LIME_GREEN,
+        fire: false,
+        std_cooldown: 0.2,
+        cooldown:0.0,
     });
 
     //planet
@@ -160,6 +192,20 @@ fn setup(
         ..Default::default()
     })
         .insert(Name::new("Planet"));
+
+    //planet down
+
+    commands.spawn_bundle(SceneBundle {
+        scene: asset_server.load("models/planet1.glb#Scene0"),
+        transform:Transform {
+            translation: Vec3::new(0.0,-180.0,-146.0),
+            scale: Vec3::new(128.0,128.0,128.0),
+            //rotation: Quat::from_rotation_y(std::f32::consts::FRAC_PI_2),
+            ..default()
+        },
+        ..Default::default()
+    })
+        .insert(Name::new("Planet down"));
 
     //sky
     let store_texture_handle = asset_server.load("images/skybox_front1.png");
@@ -277,6 +323,16 @@ fn spawn_opponent(
             min: -1000.0,
             max: 0.0
         })
+        .insert(LaserGun{
+            positions: vec!(
+                Vec3::new(0.0,0.0,5.0)
+            ),
+            player: false,
+            color: Color::MIDNIGHT_BLUE,
+            fire: false,
+            cooldown:0.0,
+            std_cooldown: rng.gen_range(0.4..2.0)
+        })
         .insert(Name::new("Opponent"))
         .insert(Opponent{});
 }
@@ -292,58 +348,86 @@ fn despawn_all(
     }
 }
 
-const COOLDOWN:f32=0.2;
+fn laser_player(
+    keyboard_input:Res<Input<KeyCode>>,
+    mut query: Query<&mut LaserGun,With<Ship>>
+){
+    let mut laser_gun = query.single_mut();
+    if keyboard_input.pressed(KeyCode::Space) {
+        laser_gun.fire = true;
+    } else {
+        laser_gun.fire = false;
+    }
+}
+
+fn laser_opponent(
+    mut query: Query<( &Transform, &mut LaserGun), With<Opponent>>
+){
+    for (transfrom, mut laser_gun) in query.iter_mut() {
+        if transfrom.translation.z.abs() < 200.0 {
+            laser_gun.fire = true;
+        } else {
+            laser_gun.fire = false;
+        }
+    }
+}
 
 fn spawn_laser(
     mut commands: Commands,
     time:Res<Time>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    keyboard_input:Res<Input<KeyCode>>,
-    mut query: Query<(&Transform,&mut Ship)>
+    mut query: Query<(&Transform,&mut LaserGun)>
 )
 {
-    if keyboard_input.pressed(KeyCode::Space) {
-        let (ship_transform, mut ship) = query.single_mut();
-
-        if ship.cooldown <= 0.0 {
-            ship.cooldown = COOLDOWN;
-            for gun in &ship.guns {
-                commands.spawn_bundle(PbrBundle {
-                    mesh: meshes.add(Mesh::from(shape::Box::new(0.2, 0.2, 3.2))),
-                    material: materials.add(StandardMaterial {
-                        base_color: Color::LIME_GREEN,
-                        emissive: Color::LIME_GREEN,
-                        ..Default::default()
-                    }),
-                    transform: Transform {
-                        translation: ship_transform.translation.clone() + gun.clone(),
-                        rotation: ship_transform.rotation.clone(),
-                        scale: Vec3::new(1.0, 1.0, 1.0),
-                        ..default()
-                    },
-                    ..Default::default()
-                })
-                    //.insert(Speed { value: 10.0 })
-                    .insert(RigidBody::KinematicVelocityBased)
-                    .insert(Sleeping::disabled())
-                    .insert(Collider::cuboid(0.2 / 2.0,
-                                             0.2 / 2.0,
-                                             3.2 / 2.0))
-                    .insert(Velocity {
-                        linvel: ship_transform.forward() * 600.0,
+    for (transform, mut laser_gun) in query.iter_mut() {
+        if laser_gun.fire {
+            if laser_gun.cooldown <= 0.0 {
+                laser_gun.cooldown = laser_gun.std_cooldown;
+                for gun in &laser_gun.positions {
+                    let linvel = if laser_gun.player {
+                        transform.forward() * 600.0
+                    } else {
+                        transform.back() * 600.0
+                    };
+                    commands.spawn_bundle(PbrBundle {
+                        mesh: meshes.add(Mesh::from(shape::Box::new(0.2, 0.2, 3.2))),
+                        material: materials.add(StandardMaterial {
+                            base_color: laser_gun.color.clone(),
+                            emissive: laser_gun.color.clone(),
+                            ..Default::default()
+                        }),
+                        transform: Transform {
+                            translation: transform.translation.clone() + gun.clone(),
+                            rotation: transform.rotation.clone(),
+                            scale: Vec3::new(1.0, 1.0, 1.0),
+                            ..default()
+                        },
                         ..Default::default()
                     })
-                    .insert(GravityScale(0.0))
-                    .insert(Despawnable {
-                        min: -1000.0,
-                        max: 0.0
-                    })
-                    .insert(Name::new("Laser"))
-                    .insert(Laser);
+                        //.insert(Speed { value: 10.0 })
+                        .insert(RigidBody::KinematicVelocityBased)
+                        .insert(Sleeping::disabled())
+                        .insert(Collider::cuboid(0.2 / 2.0,
+                                                 0.2 / 2.0,
+                                                 3.2 / 2.0))
+                        .insert(Velocity {
+                            linvel: linvel,
+                            ..Default::default()
+                        })
+                        .insert(GravityScale(0.0))
+                        .insert(Despawnable {
+                            min: -1000.0,
+                            max: 0.0
+                        })
+                        .insert(Name::new("Laser"))
+                        .insert(Laser{
+                            player: laser_gun.player
+                        });
+                }
+            } else {
+                laser_gun.cooldown -= time.delta_seconds();
             }
-        } else {
-            ship.cooldown -= time.delta_seconds();
         }
     }
 }
@@ -351,22 +435,47 @@ fn spawn_laser(
 fn collision(
     mut collision_events: EventReader<CollisionEvent>,
     mut query_opponent: Query<(Entity,&mut Transform, &Opponent), Without<Laser>>,
-    query_laser: Query<(Entity, &Transform), With<Laser>>,
+    query_laser: Query<(Entity, &Transform, &Laser)>,
+    mut query_ship: Query<(Entity, &mut Ship)>,
     mut event_create_effect: EventWriter<CreateEffectEvent>,
     mut commands: Commands
 ){
+    let (entity_ship, mut ship) = query_ship.single_mut();
     for e in collision_events.iter(){
         //println!("Collision");
         for (entity_opponent, mut opponent_transform, _opponent) in query_opponent.iter_mut() {
             match e {
                 CollisionEvent::Started(e1, e2, _) => {
                     if e1 == &entity_opponent || e2 == &entity_opponent{
-                        for (entity_laser, _) in query_laser.iter() {
-                            if e1 == &entity_laser || e2 == &entity_laser {
-                                event_create_effect.send(CreateEffectEvent(Vec3::from(opponent_transform.translation)));
-                                commands.entity(entity_laser).despawn_recursive();
-                                commands.entity(entity_opponent).despawn_recursive();
+                        if e1 == &entity_ship || e2 == &entity_ship {
+                            // Ship -- Opponent
+                            ship.shields -= 0.10;
+                            event_create_effect.send(CreateEffectEvent(Vec3::from(opponent_transform.translation)));
+                            commands.entity(entity_opponent).despawn_recursive();
 
+                        } else {
+                            for (entity_laser, _, laser) in query_laser.iter() {
+                                if e1 == &entity_laser || e2 == &entity_laser {
+                                    if laser.player {
+                                        // Laser -- Opponent
+                                        ship.hits += 1;
+                                        event_create_effect.send(CreateEffectEvent(Vec3::from(opponent_transform.translation)));
+                                        commands.entity(entity_laser).despawn_recursive();
+                                        commands.entity(entity_opponent).despawn_recursive();
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        if e1 == &entity_ship || e2 == &entity_ship {
+                            for (entity_laser, _, laser) in query_laser.iter() {
+                                if e1 == &entity_laser || e2 == &entity_laser {
+                                    if ! laser.player {
+                                        // Laser -- Ship
+                                        ship.shields -= 0.05;
+                                        commands.entity(entity_laser).despawn_recursive();
+                                    }
+                                }
                             }
                         }
                     }
@@ -448,5 +557,51 @@ fn remove_effect(
         }
     }
 }
+
+fn create_ui(
+    mut egui_context: ResMut<EguiContext>,
+    mut query: Query<(&Ship)>
+) {
+    let ship = query.single();
+
+    let my_frame = egui::containers::Frame {
+        fill: Color32::from_rgba_premultiplied(0, 0, 0, 0),
+        ..Default::default()
+    };
+
+    egui::CentralPanel::default().frame(my_frame)
+    //egui::Window::new("Properties")
+        .show(egui_context.ctx_mut(), |ui| {
+            let mut style = (*ui.ctx().style()).clone();
+            // Redefine text_styles
+            style.text_styles = [
+               (egui::TextStyle::Heading, egui::FontId::new(30.0, egui::FontFamily::Proportional)),
+               (egui::TextStyle::Name("Heading2".into()), egui::FontId::new(25.0, egui::FontFamily::Proportional)),
+               (egui::TextStyle::Name("Context".into()), egui::FontId::new(23.0, egui::FontFamily::Proportional)),
+               (egui::TextStyle::Body, egui::FontId::new(24.0, egui::FontFamily::Proportional)),
+               (egui::TextStyle::Monospace, egui::FontId::new(14.0, egui::FontFamily::Proportional)),
+               (egui::TextStyle::Button, egui::FontId::new(24.0, egui::FontFamily::Proportional)),
+               (egui::TextStyle::Small, egui::FontId::new(10.0, egui::FontFamily::Proportional)),
+             ].into();
+            style.visuals.widgets.noninteractive.fg_stroke = egui::Stroke{
+                color:egui::Color32::WHITE,
+                width: 5.0
+            }  ;
+            // Mutate global style with above changes
+            ui.ctx().set_style(style);
+            ui.horizontal(|ui| {
+                ui.add_sized([70.0, 40.0],egui::Label::new("Shield:"));
+                let progress_bar = egui::ProgressBar::new(ship.shields)
+                    .show_percentage();
+                ui.add_sized([400.0, 40.0], progress_bar);
+                ui.allocate_space(egui::Vec2::new(20.0, 40.0));
+                //ui.add(progress_bar);
+                ui.label("Hits:");
+                ui.text_edit_singleline( &mut format!("{}",ship.hits).as_str());
+        });
+    });
+}
+
+
 
 

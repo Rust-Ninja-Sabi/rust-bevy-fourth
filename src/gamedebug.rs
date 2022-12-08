@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 use bevy_inspector_egui::{WorldInspectorPlugin,WorldInspectorParams};
 use bevy_inspector_egui_rapier::InspectableRapierPlugin;
-use crate::orbitcamera::{OrbitCameraPlugin, OrbitCamera, CameraEvents};
+use crate::orbitcamera::{OrbitCameraPlugin, OrbitCamera};
 
 pub struct GameDebugPlugin;
 
@@ -32,6 +32,7 @@ fn setup_debug(
     commands.spawn_bundle(Camera3dBundle{
         camera: Camera{
             is_active:false,
+            priority:5,
             ..default()
         },
         ..default()

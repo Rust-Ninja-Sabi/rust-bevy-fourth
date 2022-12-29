@@ -1,18 +1,33 @@
+use std::time::Duration;
 use bevy::prelude::*;
-use bevy::time::FixedTimestep;
 use bevy_rapier3d::prelude::*;
 use rand::Rng;
 use bevy_egui::{egui, EguiContext, EguiPlugin};
-use bevy_egui::egui::{Color32, Stroke};
-use bevy_egui::egui::color_picker::color_edit_button_hsva;
+use bevy_egui::egui::Color32;
 use lerp::Lerp;
 
 use gamedebug::GameDebugPlugin;
+use crate::skybox::{RotateSkyboxEvent, SkyboxPlugin};
 
 mod orbitcamera;
 mod gamedebug;
+mod skybox;
 
 const SHIP_POSTION: Vec3 = Vec3::new(0.0, 0.0, -25.0);
+
+struct GameAssets {
+    fighter_scene: Handle<Scene>,
+    planet_scene: Handle<Scene>,
+    planet_down_scene: Handle<Scene>,
+    opponent_1_scene: Handle<Scene>,
+    opponent_2_scene: Handle<Scene>,
+}
+
+struct Level{
+    value: usize
+}
+
+struct SpanTimer(Timer);
 
 #[derive(Component)]
 struct Despawnable{
@@ -21,9 +36,12 @@ struct Despawnable{
 }
 
 #[derive(Component)]
+struct Planet;
+
+#[derive(Component)]
 struct Ship{
     shields: f32,
-    hits: usize
+    hits: i32
 }
 
 #[derive(Component)]
@@ -62,6 +80,8 @@ fn main() {
             ..Default::default()
         })
         .insert_resource(ClearColor(Color::BLACK))
+        .insert_resource(Level{value:1})
+        .insert_resource(SpanTimer(Timer::from_seconds(2.0,true)))
         .add_event::<CreateEffectEvent>()
         //.insert_resource(Score::default())
         //bevy itself
@@ -69,6 +89,8 @@ fn main() {
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugin(EguiPlugin)
         .add_plugin(GameDebugPlugin)
+        .add_plugin(SkyboxPlugin)
+        .add_startup_system_to_stage(StartupStage::PreStartup, asset_loading)
         .add_startup_system(setup_camera)
         .add_startup_system(setup)
         //.add_state(GameState::GameStart)
@@ -80,13 +102,24 @@ fn main() {
         .add_system(create_effect)
         .add_system(remove_effect)
         .add_system(create_ui)
-        .add_system_set(
-            SystemSet::new()
-                .with_run_criteria(FixedTimestep::step(2.0))
-                .with_system(spawn_opponent)
-                .with_system(despawn_all)
-        )
+        .add_system(change_level)
+        .add_system(spawn_opponent)
+        .add_system(despawn_all)
         .run();
+}
+
+fn asset_loading(
+    mut commands: Commands,
+    assets: Res<AssetServer>
+)
+{
+    commands.insert_resource(GameAssets{
+        fighter_scene: assets.load("models/fighter.glb#Scene0"),
+        planet_scene: assets.load("models/planet.glb#Scene0"),
+        planet_down_scene: assets.load("models/planet1.glb#Scene0"),
+        opponent_1_scene: assets.load("models/fighter2.glb#Scene0"),
+        opponent_2_scene: assets.load("models/stonea.glb#Scene0"),
+    })
 }
 
 fn setup_camera(
@@ -115,9 +148,7 @@ fn setup_camera(
 
 fn setup(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    asset_server: Res<AssetServer>,
+    game_assets: Res<GameAssets>,
 ) {
 
     //light
@@ -143,7 +174,7 @@ fn setup(
     //ship
 
     commands.spawn_bundle(SceneBundle {
-        scene: asset_server.load("models/fighter.glb#Scene0"),
+        scene: game_assets.fighter_scene.clone(),
         transform:Transform {
             translation: SHIP_POSTION.clone(),
             scale: Vec3::new(1.0,1.0,1.0),
@@ -165,7 +196,7 @@ fn setup(
     .insert(Name::new("Ship"))
     .insert(Ship{
         shields: 1.0,
-        hits: 0
+        hits: 10
     })
     .insert(LaserGun{
         positions: vec!(
@@ -182,7 +213,7 @@ fn setup(
     //planet
 
     commands.spawn_bundle(SceneBundle {
-        scene: asset_server.load("models/planet.glb#Scene0"),
+        scene: game_assets.planet_scene.clone(),
         transform:Transform {
             translation: Vec3::new(-80.0,0.0,-320.0),
             scale: Vec3::new(16.0,16.0,16.0),
@@ -191,12 +222,13 @@ fn setup(
         },
         ..Default::default()
     })
+        .insert(Planet{})
         .insert(Name::new("Planet"));
 
     //planet down
 
     commands.spawn_bundle(SceneBundle {
-        scene: asset_server.load("models/planet1.glb#Scene0"),
+        scene: game_assets.planet_down_scene.clone(),
         transform:Transform {
             translation: Vec3::new(0.0,-180.0,-146.0),
             scale: Vec3::new(128.0,128.0,128.0),
@@ -205,34 +237,35 @@ fn setup(
         },
         ..Default::default()
     })
+        .insert(Planet{})
         .insert(Name::new("Planet down"));
 
     //sky
-    let store_texture_handle = asset_server.load("images/skybox_front1.png");
-    let store_aspect = 1.0;
+  //  let store_texture_handle = asset_server.load("images/skybox_front1.png");
+  //  let store_aspect = 1.0;
 
-    let store_quad_width = 640.0;
-    let store_quad_handle = meshes.add(Mesh::from(shape::Quad::new(Vec2::new(
-        store_quad_width,
-        store_quad_width * store_aspect,
-    ))));
+  //  let store_quad_width = 640.0;
+  //  let store_quad_handle = meshes.add(Mesh::from(shape::Quad::new(Vec2::new(
+  //      store_quad_width,
+  //      store_quad_width * store_aspect,
+  //  ))));
 
-    let store_material_handle = materials.add(StandardMaterial {
-        base_color_texture: Some(store_texture_handle.clone()),
-        unlit: true,
-        ..Default::default()
-    });
+  //  let store_material_handle = materials.add(StandardMaterial {
+  //      base_color_texture: Some(store_texture_handle.clone()),
+  //      unlit: true,
+  //      ..Default::default()
+  //  });
 
-    commands.spawn_bundle(PbrBundle {
-        mesh: store_quad_handle.clone(),
-        material: store_material_handle,
-        transform: Transform {
-            translation: Vec3::new(0.0, 0.0, -500.0),
-            rotation: Quat::from_rotation_x(0.0),
-            ..Default::default()
-        },
-        ..Default::default()
-    });
+  //  commands.spawn_bundle(PbrBundle {
+  //      mesh: store_quad_handle.clone(),
+   //     material: store_material_handle,
+   //     transform: Transform {
+ //           translation: Vec3::new(0.0, 0.0, -500.0),
+ //           rotation: Quat::from_rotation_x(0.0),
+ //           ..Default::default()
+ //       },
+ //       ..Default::default()
+ //   });
 }
 
 
@@ -294,47 +327,78 @@ const SPAWN_POS:Vec3 = Vec3::new(0.0,0.0,-300.0);
 
 fn spawn_opponent(
     mut commands: Commands,
-    asset_server: Res<AssetServer>
+    time:Res<Time>,
+    mut spawn_timer: ResMut<SpanTimer>,
+    level: Res<Level>,
+    game_assets: Res<GameAssets>
 ){
-    let mut rng = rand::thread_rng();
+    if spawn_timer.0.tick(time.delta()).just_finished() {
+        let mut rng = rand::thread_rng();
 
-    commands.spawn_bundle(SceneBundle {
-        scene: asset_server.load("models/fighter2.glb#Scene0"),
-        transform:Transform {
-            translation: SPAWN_POS.clone()+Vec3::new(rng.gen_range(-15.0..15.0),
-                                                     rng.gen_range(-10.0..10.0),
-                                                     0.0),
-            scale: Vec3::new(1.0,1.0,1.0),
-            ..default()
-        },
-        ..Default::default()
-    })
-        .insert(RigidBody::Dynamic)
-        .insert(Velocity {
-            linvel: Vec3::new(0.0, 0.0, rng.gen_range(40.0..80.0)),
-            ..default()
+        let scene = if level.value == 1 {
+            game_assets.opponent_1_scene.clone()
+        } else {
+            game_assets.opponent_2_scene.clone()
+        };
+
+        let factor = if level.value == 1 {
+            3.0
+        } else {
+            rng.gen_range(4.0..=28.0)
+        };
+
+        println!("factor {}", factor);
+        let scale = if level.value == 1 {
+            Vec3::new(1.0, 1.0, 1.0)
+        } else {
+            Vec3::new(factor, factor, factor)
+        };
+
+        let collider = if level.value == 1 {
+            Collider::cuboid(factor,
+                             factor,
+                             factor)
+        } else {
+            Collider::ball(0.5)
+        };
+
+
+        commands.spawn_bundle(SceneBundle {
+            scene: scene,
+            transform: Transform {
+                translation: SPAWN_POS.clone() + Vec3::new(rng.gen_range(-15.0..15.0),
+                                                           rng.gen_range(-10.0..10.0),
+                                                           0.0),
+                scale: scale,
+                ..default()
+            },
+            ..Default::default()
         })
-        .insert(Collider::cuboid(3.0,
-                                 3.0,
-                                 3.0))
-        .insert(ActiveEvents::COLLISION_EVENTS)
-        .insert(GravityScale(0.0))
-        .insert(Despawnable{
-            min: -1000.0,
-            max: 0.0
-        })
-        .insert(LaserGun{
-            positions: vec!(
-                Vec3::new(0.0,0.0,5.0)
-            ),
-            player: false,
-            color: Color::MIDNIGHT_BLUE,
-            fire: false,
-            cooldown:0.0,
-            std_cooldown: rng.gen_range(0.4..2.0)
-        })
-        .insert(Name::new("Opponent"))
-        .insert(Opponent{});
+            .insert(RigidBody::Dynamic)
+            .insert(Velocity {
+                linvel: Vec3::new(0.0, 0.0, rng.gen_range(40.0..80.0)),
+                ..default()
+            })
+            .insert(collider)
+            .insert(ActiveEvents::COLLISION_EVENTS)
+            .insert(GravityScale(0.0))
+            .insert(Despawnable {
+                min: -1000.0,
+                max: 0.0
+            })
+            .insert(LaserGun {
+                positions: vec!(
+                    Vec3::new(0.0, 0.0, 5.0)
+                ),
+                player: false,
+                color: Color::MIDNIGHT_BLUE,
+                fire: false,
+                cooldown: 0.0,
+                std_cooldown: rng.gen_range(0.4..2.0)
+            })
+            .insert(Name::new("Opponent"))
+            .insert(Opponent {});
+    }
 }
 
 fn despawn_all(
@@ -361,13 +425,16 @@ fn laser_player(
 }
 
 fn laser_opponent(
-    mut query: Query<( &Transform, &mut LaserGun), With<Opponent>>
+    mut query: Query<( &Transform, &mut LaserGun), With<Opponent>>,
+    level: Res<Level>
 ){
-    for (transfrom, mut laser_gun) in query.iter_mut() {
-        if transfrom.translation.z.abs() < 200.0 {
-            laser_gun.fire = true;
-        } else {
-            laser_gun.fire = false;
+    if level.value == 1 {
+        for (transfrom, mut laser_gun) in query.iter_mut() {
+            if transfrom.translation.z.abs() < 200.0 {
+                laser_gun.fire = true;
+            } else {
+                laser_gun.fire = false;
+            }
         }
     }
 }
@@ -443,7 +510,7 @@ fn collision(
     let (entity_ship, mut ship) = query_ship.single_mut();
     for e in collision_events.iter(){
         //println!("Collision");
-        for (entity_opponent, mut opponent_transform, _opponent) in query_opponent.iter_mut() {
+        for (entity_opponent, opponent_transform, _opponent) in query_opponent.iter_mut() {
             match e {
                 CollisionEvent::Started(e1, e2, _) => {
                     if e1 == &entity_opponent || e2 == &entity_opponent{
@@ -458,7 +525,7 @@ fn collision(
                                 if e1 == &entity_laser || e2 == &entity_laser {
                                     if laser.player {
                                         // Laser -- Opponent
-                                        ship.hits += 1;
+                                        ship.hits -= 1;
                                         event_create_effect.send(CreateEffectEvent(Vec3::from(opponent_transform.translation)));
                                         commands.entity(entity_laser).despawn_recursive();
                                         commands.entity(entity_opponent).despawn_recursive();
@@ -560,7 +627,7 @@ fn remove_effect(
 
 fn create_ui(
     mut egui_context: ResMut<EguiContext>,
-    mut query: Query<(&Ship)>
+    query: Query<&Ship>
 ) {
     let ship = query.single();
 
@@ -596,10 +663,40 @@ fn create_ui(
                 ui.add_sized([400.0, 40.0], progress_bar);
                 ui.allocate_space(egui::Vec2::new(20.0, 40.0));
                 //ui.add(progress_bar);
-                ui.label("Hits:");
+                ui.label("To Hits:");
                 ui.text_edit_singleline( &mut format!("{}",ship.hits).as_str());
         });
     });
+}
+
+const CHANGE_LEVEL_HITS:i32 = 10;
+
+fn change_level(
+    mut commands: Commands,
+    mut spawn_timer: ResMut<SpanTimer>,
+    mut event_rotate_skybox: EventWriter<RotateSkyboxEvent>,
+    mut level: ResMut<Level>,
+    mut query_ship: Query<&mut Ship>,
+    query_planet: Query<Entity,With<Planet>>
+){
+    let mut ship = query_ship.single_mut();
+    if  ship.hits <= 0 {
+        ship.hits = CHANGE_LEVEL_HITS;
+        level.value += 1;
+        match level.value {
+            2 => {
+                //let mut state = fixed_timesteps.get(TIME_LABEL).unwrap();
+                //rotate sky
+                event_rotate_skybox.send(RotateSkyboxEvent());
+                //remove planets
+                for e in query_planet.iter(){
+                    commands.entity(e).despawn_recursive();
+                };
+                spawn_timer.0.set_duration(Duration::from_secs_f32(0.4))
+            },
+            _ =>{}
+        };
+    }
 }
 
 

@@ -71,7 +71,7 @@ fn setup_skybox(
             ..Default::default()
         });
 
-        let entity =  commands.spawn_bundle(PbrBundle {
+        let entity =  commands.spawn(PbrBundle {
             mesh: store_quad_handle.clone(),
             material: store_material_handle,
             transform: Transform {
@@ -88,7 +88,7 @@ fn setup_skybox(
         children_list.push(entity);
     };
 
-    commands.spawn_bundle(
+    commands.spawn(
         SpatialBundle {
             transform: Transform::from_translation(Vec3::ZERO),
             visibility: Visibility {

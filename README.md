@@ -15,6 +15,10 @@ All assests are made by myself in Blender (www.blender.org).
 
 <img src="img/step2.gif" width="320" align="left"><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
 
+## 3. Step _ level two
+
+<img src="img/step3.gif" width="320" align="left"><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
+
 
 ```Rust
 

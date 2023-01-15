@@ -2,7 +2,7 @@ use std::time::Duration;
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 use rand::Rng;
-use bevy_egui::{egui, EguiContext, EguiPlugin};
+use bevy_egui::{egui, EguiContext};
 use bevy_egui::egui::Color32;
 use lerp::Lerp;
 
@@ -15,6 +15,7 @@ mod skybox;
 
 const SHIP_POSTION: Vec3 = Vec3::new(0.0, 0.0, -25.0);
 
+#[derive(Resource)]
 struct GameAssets {
     fighter_scene: Handle<Scene>,
     planet_scene: Handle<Scene>,
@@ -23,10 +24,12 @@ struct GameAssets {
     opponent_2_scene: Handle<Scene>,
 }
 
+#[derive(Resource)]
 struct Level{
     value: usize
 }
 
+#[derive(Resource)]
 struct SpanTimer(Timer);
 
 #[derive(Component)]
@@ -73,21 +76,23 @@ fn main() {
     App::new()
         //add config resources
         .insert_resource(Msaa {samples: 4})
-        .insert_resource(WindowDescriptor{
-            title: "bevy fourth".to_string(),
-            width: 920.0,
-            height: 640.0,
-            ..Default::default()
-        })
         .insert_resource(ClearColor(Color::BLACK))
         .insert_resource(Level{value:1})
-        .insert_resource(SpanTimer(Timer::from_seconds(2.0,true)))
+        .insert_resource(SpanTimer(Timer::from_seconds(2.0,TimerMode::Repeating)))
         .add_event::<CreateEffectEvent>()
         //.insert_resource(Score::default())
         //bevy itself
-        .add_plugins(DefaultPlugins)
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            window: WindowDescriptor {
+                title: "bevy fourth".to_string(),
+                width: 920.0,
+                height: 640.0,
+                ..default()
+            },
+            ..default()
+        }))
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
-        .add_plugin(EguiPlugin)
+        //.add_plugin(EguiPlugin)
         .add_plugin(GameDebugPlugin)
         .add_plugin(SkyboxPlugin)
         .add_startup_system_to_stage(StartupStage::PreStartup, asset_loading)
@@ -126,7 +131,7 @@ fn setup_camera(
     mut commands: Commands
 ) {
     commands.
-        spawn_bundle(Camera3dBundle {
+        spawn(Camera3dBundle {
             transform: Transform::from_xyz(0.0, 2.0, 0.0),
             ..Default::default()
         })
@@ -136,7 +141,7 @@ fn setup_camera(
         })
         .insert(Name::new("MainCamera"));
 
-    commands.spawn_bundle(Camera3dBundle{
+    commands.spawn(Camera3dBundle{
         camera: Camera{
             is_active:false,
             ..default()
@@ -152,7 +157,7 @@ fn setup(
 ) {
 
     //light
-    commands.spawn_bundle(DirectionalLightBundle {
+    commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
             shadows_enabled: true,
             ..default()
@@ -173,7 +178,7 @@ fn setup(
 
     //ship
 
-    commands.spawn_bundle(SceneBundle {
+    commands.spawn(SceneBundle {
         scene: game_assets.fighter_scene.clone(),
         transform:Transform {
             translation: SHIP_POSTION.clone(),
@@ -212,7 +217,7 @@ fn setup(
 
     //planet
 
-    commands.spawn_bundle(SceneBundle {
+    commands.spawn(SceneBundle {
         scene: game_assets.planet_scene.clone(),
         transform:Transform {
             translation: Vec3::new(-80.0,0.0,-320.0),
@@ -227,7 +232,7 @@ fn setup(
 
     //planet down
 
-    commands.spawn_bundle(SceneBundle {
+    commands.spawn(SceneBundle {
         scene: game_assets.planet_down_scene.clone(),
         transform:Transform {
             translation: Vec3::new(0.0,-180.0,-146.0),
@@ -240,32 +245,6 @@ fn setup(
         .insert(Planet{})
         .insert(Name::new("Planet down"));
 
-    //sky
-  //  let store_texture_handle = asset_server.load("images/skybox_front1.png");
-  //  let store_aspect = 1.0;
-
-  //  let store_quad_width = 640.0;
-  //  let store_quad_handle = meshes.add(Mesh::from(shape::Quad::new(Vec2::new(
-  //      store_quad_width,
-  //      store_quad_width * store_aspect,
-  //  ))));
-
-  //  let store_material_handle = materials.add(StandardMaterial {
-  //      base_color_texture: Some(store_texture_handle.clone()),
-  //      unlit: true,
-  //      ..Default::default()
-  //  });
-
-  //  commands.spawn_bundle(PbrBundle {
-  //      mesh: store_quad_handle.clone(),
-   //     material: store_material_handle,
-   //     transform: Transform {
- //           translation: Vec3::new(0.0, 0.0, -500.0),
- //           rotation: Quat::from_rotation_x(0.0),
- //           ..Default::default()
- //       },
- //       ..Default::default()
- //   });
 }
 
 
@@ -347,7 +326,7 @@ fn spawn_opponent(
             rng.gen_range(4.0..=28.0)
         };
 
-        println!("factor {}", factor);
+        // println!("factor {}", factor);
         let scale = if level.value == 1 {
             Vec3::new(1.0, 1.0, 1.0)
         } else {
@@ -363,7 +342,7 @@ fn spawn_opponent(
         };
 
 
-        commands.spawn_bundle(SceneBundle {
+        commands.spawn(SceneBundle {
             scene: scene,
             transform: Transform {
                 translation: SPAWN_POS.clone() + Vec3::new(rng.gen_range(-15.0..15.0),
@@ -457,7 +436,7 @@ fn spawn_laser(
                     } else {
                         transform.back() * 600.0
                     };
-                    commands.spawn_bundle(PbrBundle {
+                    commands.spawn(PbrBundle {
                         mesh: meshes.add(Mesh::from(shape::Box::new(0.2, 0.2, 3.2))),
                         material: materials.add(StandardMaterial {
                             base_color: laser_gun.color.clone(),
@@ -570,7 +549,7 @@ fn create_effect(
             for y in 0..2 {
                 for z in -2..2 {
                     commands
-                        .spawn_bundle(PbrBundle {
+                        .spawn(PbrBundle {
                             mesh: meshes.add(Mesh::from(shape::Box::new(1.0, 1.0, 1.0))),
                             material: materials.add(StandardMaterial {
                                 metallic: 0.5,
@@ -594,7 +573,7 @@ fn create_effect(
                             ..Default::default()
                         })
                         .insert(EffectTime{
-                            timer: Timer::from_seconds(EFFECT_TIME,false)
+                            timer: Timer::from_seconds(EFFECT_TIME,TimerMode::Once)
                         })
                         .insert(Sleeping::disabled());
                         //.insert(Collider::cuboid(1.0 / 2.0, 1.0 / 2.0, 1.0 / 2.0));
@@ -692,13 +671,12 @@ fn change_level(
                 for e in query_planet.iter(){
                     commands.entity(e).despawn_recursive();
                 };
-                spawn_timer.0.set_duration(Duration::from_secs_f32(0.4))
+                spawn_timer.0.set_duration(Duration::from_secs_f32(0.1))
             },
             _ =>{}
         };
     }
 }
-
 
 
 

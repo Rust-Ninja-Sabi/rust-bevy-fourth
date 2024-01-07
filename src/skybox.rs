@@ -11,15 +11,15 @@ struct Skybox{
 #[derive(Component)]
 struct Wall{}
 
+#[derive(Event)]
 pub struct RotateSkyboxEvent();
 
 impl Plugin for SkyboxPlugin {
     fn build(&self, app: &mut App){
         app
-            .add_startup_system_to_stage(StartupStage::PreStartup, setup_skybox)
+            .add_systems(PreStartup,setup_skybox)
             .add_event::<RotateSkyboxEvent>()
-            .add_system(start_rotate)
-            .add_system(rotate);
+            .add_systems(Update, (start_rotate, rotate));
     }
 }
 
@@ -91,9 +91,7 @@ fn setup_skybox(
     commands.spawn(
         SpatialBundle {
             transform: Transform::from_translation(Vec3::ZERO),
-            visibility: Visibility {
-                is_visible: true,
-            },
+            visibility:  Visibility::Visible,
             ..Default::default()
         },
     )

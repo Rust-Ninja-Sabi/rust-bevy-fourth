@@ -2,7 +2,7 @@
 // https://github.com/iMplode-nZ/bevy-orbit-controls
 // Thanks.
 use bevy::prelude::*;
-use bevy_egui::EguiContext;
+use bevy_egui::EguiContexts;
 
 use bevy::input::mouse::MouseMotion;
 use bevy::input::mouse::MouseScrollUnit::{Line, Pixel};
@@ -19,14 +19,12 @@ impl Plugin for OrbitCameraPlugin {
     fn build(&self, app: &mut App){
         app
             .add_event::<CameraEvents>()
-            .add_system(emit_motion_events)
-            .add_system(mouse_motion)
-            .add_system(emit_zoom_events)
-            .add_system(zoom)
-            .add_system(update_transform);
+            .add_systems( Update,(emit_motion_events, mouse_motion, emit_zoom_events,zoom,
+                          update_transform));
     }
 }
 
+#[derive(Event)]
 pub enum CameraEvents {
     Orbit(Vec2),
     Pan(Vec2),
@@ -80,7 +78,7 @@ impl OrbitCamera {
 fn emit_motion_events(
     mut events: EventWriter<CameraEvents>,
     mut mouse_motion_events: EventReader<MouseMotion>,
-    res:Option<ResMut<EguiContext>>,
+    mut egui_context:EguiContexts,
     mouse_button_input: Res<Input<MouseButton>>,
     mut query: Query<&OrbitCamera>
 ){
@@ -90,15 +88,12 @@ fn emit_motion_events(
     for event in mouse_motion_events.iter() {
         delta += event.delta;
     }
-    match res{
-        Some(mut egui_context) => {
-            let context = egui_context.ctx_mut();
-            if context.wants_pointer_input() {
-                send_event = false
-            }
-        }
-        _ => {}
+
+    let context = egui_context.ctx_mut();
+    if context.wants_pointer_input() {
+        send_event = false
     }
+
     for camera in query.iter_mut() {
         if camera.enabled {
             if mouse_button_input.pressed(camera.rotate_button){
@@ -125,7 +120,7 @@ fn mouse_motion(
             continue;
         }
 
-        for event in events.iter() {
+        for event in events.read() {
             match event {
                 CameraEvents::Orbit(delta) => {
                     camera.x -= delta.x * camera.rotate_sensitivity * time.delta_seconds();
@@ -155,7 +150,7 @@ fn emit_zoom_events(
     mut query: Query<&OrbitCamera>
 ){
     let mut total = 0.0;
-    for event in mouse_wheel_events.iter() {
+    for event in mouse_wheel_events.read() {
         total += event.y
             * match event.unit {
             Line => 1.0,

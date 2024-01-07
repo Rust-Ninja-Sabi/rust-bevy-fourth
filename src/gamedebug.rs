@@ -1,7 +1,6 @@
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 use bevy_egui::EguiPlugin;
-use bevy_inspector_egui_rapier::InspectableRapierPlugin;
 use crate::egui::ScrollArea;
 use crate::egui::CollapsingHeader;
 use crate::egui::Window;
@@ -18,14 +17,11 @@ impl Plugin for GameDebugPlugin {
     fn build(&self, app: &mut App){
         app
             .insert_resource(BevyInspector{enabled:false})
-            .add_plugin(InspectableRapierPlugin)
-            .add_plugin(RapierDebugRenderPlugin::default())
-            .add_plugin(EguiPlugin)
-            .add_plugin(bevy_inspector_egui::DefaultInspectorConfigPlugin)
-            .add_plugin(OrbitCameraPlugin)
-            .add_startup_system(setup_debug)
-            .add_system(debug)
-            .add_system(inspector_ui);
+            .add_plugins((RapierDebugRenderPlugin::default(), EguiPlugin,
+                          OrbitCameraPlugin))
+            .add_systems(Startup, setup_debug)
+            .add_systems( Update, debug);
+            //.add_system(inspector_ui);
     }
 }
 
@@ -41,7 +37,6 @@ fn setup_debug(
     commands.spawn(Camera3dBundle{
         camera: Camera{
             is_active:false,
-            priority:5,
             ..default()
         },
         ..default()
@@ -73,7 +68,7 @@ fn debug(
     }
 }
 
-fn inspector_ui(
+/*fn inspector_ui(
     world: &mut World
 ) {
     let egui_context = world.resource_mut::<bevy_egui::EguiContext>().ctx_mut().clone();
@@ -95,3 +90,4 @@ fn inspector_ui(
     });
     }
 }
+*/

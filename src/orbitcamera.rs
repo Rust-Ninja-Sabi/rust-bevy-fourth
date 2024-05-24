@@ -77,15 +77,15 @@ impl OrbitCamera {
 
 fn emit_motion_events(
     mut events: EventWriter<CameraEvents>,
-    mut mouse_motion_events: EventReader<MouseMotion>,
+    mut motion_evr: EventReader<MouseMotion>,
     mut egui_context:EguiContexts,
-    mouse_button_input: Res<Input<MouseButton>>,
+    mouse_button_input: Res<ButtonInput<MouseButton>>,
     mut query: Query<&OrbitCamera>
 ){
     let mut delta = Vec2::ZERO;
     let mut send_event = true;
 
-    for event in mouse_motion_events.iter() {
+    for event in motion_evr.read(){
         delta += event.delta;
     }
 
@@ -98,12 +98,12 @@ fn emit_motion_events(
         if camera.enabled {
             if mouse_button_input.pressed(camera.rotate_button){
                 if send_event {
-                    events.send(CameraEvents::Orbit(delta))
+                    events.send(CameraEvents::Orbit(delta));
                 }
             }
             if mouse_button_input.pressed(camera.pan_button){
                 if send_event {
-                    events.send(CameraEvents::Pan(delta))
+                    events.send(CameraEvents::Pan(delta));
                 }
             }
         }
@@ -172,7 +172,7 @@ fn zoom (
     mut events: EventReader<CameraEvents>
 ){
     for mut camera in query.iter_mut(){
-        for event in events.iter() {
+        for event in events.read() {
             if camera.enabled{
                 if let CameraEvents::Zoom(distance) = event {
                     camera.distance *= camera.zoom_sensitivity.powf(*distance);

@@ -1,9 +1,6 @@
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 use bevy_egui::EguiPlugin;
-use crate::egui::ScrollArea;
-use crate::egui::CollapsingHeader;
-use crate::egui::Window;
 use crate::orbitcamera::{OrbitCameraPlugin, OrbitCamera};
 
 pub struct GameDebugPlugin;
@@ -49,21 +46,21 @@ fn setup_debug(
 }
 
 fn debug(
-    keyboard_input:Res<Input<KeyCode>>,
+    keyboard_input:Res<ButtonInput<KeyCode>>,
     mut debug_render_context : ResMut<DebugRenderContext>,
     mut bevy_inspector:ResMut<BevyInspector>,
     mut query: Query<&mut Camera>
 )
 {
-    if keyboard_input.just_pressed(KeyCode::O) {
+    if keyboard_input.just_pressed(KeyCode::KeyO) {
         for mut camera in query.iter_mut() {
             camera.is_active = ! camera.is_active
         }
     };
-    if keyboard_input.just_pressed(KeyCode::D){
+    if keyboard_input.just_pressed(KeyCode::KeyD){
         bevy_inspector.enabled = !bevy_inspector.enabled;
     };
-    if keyboard_input.just_pressed(KeyCode::P){
+    if keyboard_input.just_pressed(KeyCode::KeyP){
         debug_render_context.enabled = !debug_render_context.enabled;
     }
 }

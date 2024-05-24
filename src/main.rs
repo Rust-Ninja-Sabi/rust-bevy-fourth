@@ -7,9 +7,7 @@ use bevy_rapier3d::prelude::*;
 use rand::Rng;
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
 use bevy_egui::egui::Color32;
-use lerp::Lerp;
 
-use gamedebug::GameDebugPlugin;
 use crate::skybox::{RotateSkyboxEvent, SkyboxPlugin};
 
 mod orbitcamera;
@@ -112,7 +110,7 @@ fn main() {
         .insert_resource(Msaa::Sample4)
         .insert_resource(ClearColor(Color::BLACK))
 
-        .add_state::<GameStates>()
+        .init_state::<GameStates>()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "bevy fourth".to_string(),
@@ -150,10 +148,6 @@ fn setup_camera(
         spawn(Camera3dBundle {
             transform: Transform::from_xyz(0.0, 2.0, 0.0),
             ..Default::default()
-        })
-        .insert(UiCameraConfig {
-            show_ui: true,
-            ..default()
         })
         .insert(Name::new("MainCamera"));
 
@@ -268,21 +262,21 @@ const MAXSPEED:f32 = 30.0;
 const ACCELERATION:f32 = 0.75;
 
 fn move_ship(
-    keyboard_input:Res<Input<KeyCode>>,
+    keyboard_input:Res<ButtonInput<KeyCode>>,
     mut query: Query<(&mut Velocity, &mut Transform),With<Ship>>
 ){
     let (mut velo, mut transform) = query.single_mut();
 
-    let horizontal = if keyboard_input.pressed(KeyCode::Left) {
+    let horizontal = if keyboard_input.pressed(KeyCode::ArrowLeft) {
         -1.
-    } else if keyboard_input.pressed(KeyCode::Right) {
+    } else if keyboard_input.pressed(KeyCode::ArrowRight) {
         1.
     } else {
         0.0
     };
-    let vertical:f32 = if keyboard_input.pressed(KeyCode::Down) {
+    let vertical:f32 = if keyboard_input.pressed(KeyCode::ArrowDown) {
         -1.
-    } else if keyboard_input.pressed(KeyCode::Up) {
+    } else if keyboard_input.pressed(KeyCode::ArrowUp) {
         1.
     } else {
         0.0
@@ -499,7 +493,7 @@ fn despawn_all(
 }
 
 fn laser_player(
-    keyboard_input:Res<Input<KeyCode>>,
+    keyboard_input:Res<ButtonInput<KeyCode>>,
     mut query: Query<&mut LaserGun,With<Ship>>
 ){
     let mut laser_gun = query.single_mut();
@@ -692,9 +686,9 @@ fn create_effect(
 
 fn random_color()->Color {
     let mut rng = rand::thread_rng();
-    Color::from([rng.gen_range(0.0..1.0),
+    Color::rgb(rng.gen_range(0.0..1.0),
         rng.gen_range(0.0..1.0),
-        rng.gen_range(0.0..1.0)])
+        rng.gen_range(0.0..1.0))
 }
 
 fn remove_effect(
@@ -767,8 +761,6 @@ const CHANGE_LEVEL_HITS:i32 = 10;
 
 fn change_level(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
     mut spawn_timer: ResMut<SpanTimer>,
     mut event_rotate_skybox:
     EventWriter<RotateSkyboxEvent>,
@@ -776,7 +768,6 @@ fn change_level(
     mut query_ship: Query<&mut Ship>,
     query_planet: Query<Entity,With<Planet>>,
     mut query_opponent: Query<(Entity, &Opponent)>,
-    game_assets: Res<GameAssets>,
 ){
     let mut ship = query_ship.single_mut();
     if  ship.hits <= 0 {

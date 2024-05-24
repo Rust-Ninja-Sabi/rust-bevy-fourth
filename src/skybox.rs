@@ -104,7 +104,7 @@ fn start_rotate(
     mut rotate_events: EventReader<RotateSkyboxEvent>,
     mut query: Query<&mut Skybox>
 ){
-    for _ in rotate_events.iter(){
+    for _ in rotate_events.read(){
         for mut skybox in query.iter_mut(){
             skybox.rotate = PI/2.0;
         }

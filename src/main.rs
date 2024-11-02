@@ -675,7 +675,7 @@ fn create_ui(
                             .show_percentage();
                         ui.add_sized([400.0, 40.0], progress_bar);
                         ui.allocate_space(egui::Vec2::new(20.0, 40.0));
-                        ui.label("To Hits:");
+                        ui.label("To Hit:");
                         ui.text_edit_singleline( &mut format!("{}",ship.hits).as_str());
                     });
                     if ship.win_or_lost == WinOrLostState::Lost {

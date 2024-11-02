@@ -1,23 +1,30 @@
-# bevy-fourth - 3D space game with rust and bevy
+# bevy-planet-rust - 3D space game with rust and bevy
 
-My fourth 3D game with rust(https://www.rust-lang.org) and the bevy framework(https://bevyengine.org)
+>“Greetings, Starpilot. You have been recruited by the Rust Alliance to defend the 
+Planet Rust against Xplusians and the Pythones.  
+>
+>Rust is the way.
+”
+
+
+3D game with rust(https://www.rust-lang.org) and the bevy framework(https://bevyengine.org)
 using Rapier https://github.com/dimforge/bevy_rapier
 
 A classic space shooter  
     
 All assests are made by myself in Blender (www.blender.org).
 
-## 1. Step _ space and opponents
-
-<img src="img/step1.gif" width="320" align="left"><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
-
-## 2. Step _ score and laser
+## 1. level - planet rust
 
 <img src="img/step2.gif" width="320" align="left"><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
 
-## 3. Step _ level two
+## 2. level - asteroids
 
 <img src="img/step3.gif" width="320" align="left"><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
+
+## 3. level - tower run
+
+**comming soon**
 
 
 ```Rust

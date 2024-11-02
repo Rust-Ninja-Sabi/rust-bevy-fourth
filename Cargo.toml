@@ -1,17 +1,17 @@
 [package]
-name = "rust-bevy-fourth"
-version = "0.14.0"
+name = "planet-rust"
+version = "0.14.2"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bevy = "0.14.1"
+bevy = "0.14.2"
 bevy_rapier3d = { version = "0.27", features = [ "simd-stable", "debug-render" ] }
 rand = "*"
 bevy_egui = "0.29"
 bevy_asset_loader = "0.21"
 
 # Enable max optimizations for dependencies, but not for our code:
-[profile.dev.package."*"]
-opt-level = 3
+#[profile.dev.package."*"]
+#opt-level = 3
